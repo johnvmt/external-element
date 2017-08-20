@@ -52,14 +52,23 @@
 				return true;
 			}
 
+			attributeChangedCallback(attribute, oldVal, newVal) {
+				if(newVal != oldVal && this.resetAttributes.indexOf(attribute) >= 0 && this.ready)
+					this._replaceElement();
+			};
+
 			_mutationCallback(mutations) {
 				let thisElem = this;
 				mutations.forEach(function(mutation) {
+					let sourceNode = (mutation.target == thisElem) ? thisElem : thisElem._element;
+					let sinkNode = (mutation.target == thisElem) ? thisElem._element : thisElem;
+
+					if(sourceNode == null || sinkNode == null)
+						return;
+
 					let attributeName = mutation.attributeName;
 					let attributeValue = mutation.target.getAttribute(attributeName);
 					let attributePrefix = thisElem.attributePrefix;
-					let sourceNode = (mutation.target == thisElem) ? thisElem : thisElem._element;
-					let sinkNode = (mutation.target == thisElem) ? thisElem._element : thisElem;
 
 					if(sourceNode == thisElem && attributePrefix.length > 0 && attributeName.indexOf(attributePrefix) != 0)
 						return;
