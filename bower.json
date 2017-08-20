@@ -1,0 +1,23 @@
+{
+  "name": "external-element",
+  "version": "0.0.1",
+  "description": "A web component that allows for an external template to be used",
+  "authors": [
+    { "name": "John Murphy-Teixidor", "email": "johnvmt@gmail.com" }
+  ],
+  "license": "MIT",
+  "main": "external-element.html",
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/johnvmt/external-element.git"
+  },
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}

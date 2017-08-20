@@ -1,0 +1,153 @@
+<template is="external-element"></template>
+
+<script>
+	(function() {
+		let componentDoc =  (document._currentScript || document.currentScript).ownerDocument;
+		let componentDir = componentDoc.baseURI.substring(0, componentDoc.baseURI.lastIndexOf('/'));
+		let componentFile = componentDoc.baseURI.substring(componentDoc.baseURI.lastIndexOf('/') + 1);
+		let componentName = componentFile.substring(0, componentFile.lastIndexOf('.'));
+
+		class ExternalElement extends HTMLElement {
+
+			static get observedAttributes() {
+				return ['src', 'tag'];
+			}
+
+			get resetAttributes() {
+				return ['src', 'tag'];
+			}
+
+			get attributePrefix() {
+				return this.hasAttribute('prefix') ? this.getAttribute('prefix') : 'attribute-';
+			}
+
+			constructor() {
+				super(); // Always call super first in constructor
+
+				let thisElem = this;
+
+				// Gets content from <template>
+				let shadow = this.attachShadow({mode: 'open'});
+				let template = componentDoc.querySelector('template[is=external-element]').content;
+				shadow.appendChild(document.importNode(template, true));
+
+				thisElem._element = null;
+				thisElem._elementObserver = new MutationObserver(thisElem._mutationCallback);
+
+				let thisElemObserver = new MutationObserver(thisElem._mutationCallback);
+				thisElemObserver.observe(thisElem, {attributes: true});
+
+				if(this.ready)
+					this._replaceElement();
+			}
+
+			get ready() {
+				let resetAttributes = this.resetAttributes;
+
+				for(let index = 0 ; index < this.resetAttributes.length; index++) {
+					let attribute = this.resetAttributes[index];
+					if(!this.hasAttribute(attribute))
+						return false;
+				}
+				return true;
+			}
+
+			_mutationCallback(mutations) {
+				let thisElem = this;
+				mutations.forEach(function(mutation) {
+					let attributeName = mutation.attributeName;
+					let attributeValue = mutation.target.getAttribute(attributeName);
+					let attributePrefix = thisElem.attributePrefix;
+					let sourceNode = (mutation.target == thisElem) ? thisElem : thisElem._element;
+					let sinkNode = (mutation.target == thisElem) ? thisElem._element : thisElem;
+
+					if(sourceNode == thisElem && attributePrefix.length > 0 && attributeName.indexOf(attributePrefix) != 0)
+						return;
+
+					let sinkAttributeName = (sourceNode == thisElem) ? attributeName.substr(attributePrefix.length) : attributePrefix + attributeName;
+
+					if(attributeValue == null && sinkNode.hasAttribute(sinkAttributeName))
+						sinkNode.removeAttribute(sinkAttributeName);
+					else if(sinkNode.getAttribute(sinkAttributeName) != attributeValue)
+						sinkNode.setAttribute(sinkAttributeName, attributeValue);
+				});
+			}
+
+			_replaceElement() {
+				let thisElem = this;
+				let src = this.getAttribute('src');
+				let tag = this.getAttribute('tag');
+
+				thisElem.loadLink(src, function(error) {
+					if(error)
+						throw new Error(error);
+					else {
+						let domNode = document.createElement(tag);
+
+						if(thisElem._element) {
+							thisElem._elementObserver.disconnect();
+							thisElem.shadowRoot.replaceChild(domNode, thisElem._element);
+						}
+						else
+							thisElem.shadowRoot.appendChild(domNode);
+
+						thisElem._element = domNode;
+
+						// Apply attributes
+						for(let ctr = 0; ctr < thisElem.attributes.length; ctr++) {
+							let attributeName = thisElem.attributes[ctr].nodeName;
+							let attributeValue = thisElem.attributes[ctr].nodeValue;
+							thisElem._mutationCallback([{target: thisElem, attributeName: attributeName, attributeValue: attributeValue}])
+						}
+
+						thisElem._elementObserver.observe(domNode, {attributes: true});
+					}
+				});
+			}
+
+			applyElementAttributes(domNode, attributes) {
+				if(typeof attributes == 'object') {
+					for(let property in attributes) {
+						if(attributes.hasOwnProperty(property) && (!domNode.hasAttribute(property) || domNode.getAttribute(property) !== attributes[property]))
+							domNode.setAttribute(property, attributes[property]);
+					}
+				}
+			}
+
+			getAttributes(target) {
+				if(typeof target === 'undefined')
+					target = this;
+				let attributes = {};
+				for(let ctr = 0; ctr < target.attributes.length; ctr++) {
+					attributes[target.attributes[ctr].nodeName] = target.attributes[ctr].nodeValue;
+				}
+				return attributes;
+			};
+
+			loadLink(href, callback) {
+				let importLink = document.querySelector("link[href='" + href + "']");
+
+				if(!importLink) { // link not created yet
+					importLink = document.createElement("link");
+					importLink.setAttribute("rel", "import");
+					importLink.setAttribute("href", href);
+					document.querySelector("head").appendChild(importLink);
+				}
+
+				if(importLink.import) // already loaded
+					callback(null);
+				else {
+					importLink.onload = function() {
+						callback(null);
+					};
+
+					importLink.onerror = function(error) {
+						callback(error);
+					};
+				}
+			};
+		}
+
+		customElements.define('external-element', ExternalElement);
+	})();
+</script>
