@@ -8,7 +8,6 @@
 		let componentName = componentFile.substring(0, componentFile.lastIndexOf('.'));
 
 		class ExternalElement extends HTMLElement {
-
 			static get observedAttributes() {
 				return ['src', 'tag'];
 			}
@@ -32,9 +31,54 @@
 				shadow.appendChild(document.importNode(template, true));
 
 				thisElem._element = null;
-				thisElem._elementObserver = new MutationObserver(thisElem._mutationCallback);
+				// Copy attributes from child to parent
+				thisElem._childMutationCallback = function(mutations) {
+					mutations.forEach(function(mutation) {
+						let sourceNode = thisElem._element;
+						let sinkNode = thisElem;
 
-				let thisElemObserver = new MutationObserver(thisElem._mutationCallback);
+						if(sourceNode == null || sinkNode == null)
+							return;
+
+						let sourceAttributeName = mutation.attributeName;
+						let sinkAttributeName = thisElem.attributePrefix + sourceAttributeName;
+						let attributeValue = sourceNode.getAttribute(sourceAttributeName);
+
+						if(attributeValue == null && sinkNode.hasAttribute(sinkAttributeName))
+							sinkNode.removeAttribute(sinkAttributeName);
+						else if(sinkNode.getAttribute(sinkAttributeName) != attributeValue)
+							sinkNode.setAttribute(sinkAttributeName, attributeValue);
+					});
+				};
+
+				thisElem._elementObserver = new MutationObserver(thisElem._childMutationCallback);
+
+				// Copy attributes from parent to child
+				thisElem._parentMutationCallback = function(mutations) {
+					mutations.forEach(function(mutation) {
+						let sourceNode = thisElem;
+						let sinkNode = thisElem._element;
+
+						if(sourceNode == null || sinkNode == null)
+							return;
+
+						let sourceAttributeName = mutation.attributeName;
+						let attributePrefix = thisElem.attributePrefix;
+
+						if(attributePrefix.length > 0 && sourceAttributeName.indexOf(attributePrefix) != 0)
+							return;
+
+						let sinkAttributeName = sourceAttributeName.substr(attributePrefix.length);
+						let attributeValue = sourceNode.getAttribute(sourceAttributeName);
+
+						if(attributeValue == null && sinkNode.hasAttribute(sinkAttributeName))
+							sinkNode.removeAttribute(sinkAttributeName);
+						else if(sinkNode.getAttribute(sinkAttributeName) != attributeValue)
+							sinkNode.setAttribute(sinkAttributeName, attributeValue);
+					});
+				};
+
+				let thisElemObserver = new MutationObserver(thisElem._parentMutationCallback);
 				thisElemObserver.observe(thisElem, {attributes: true});
 
 				if(this.ready)
@@ -56,31 +100,6 @@
 				if(newVal != oldVal && this.resetAttributes.indexOf(attribute) >= 0 && this.ready)
 					this._replaceElement();
 			};
-
-			_mutationCallback(mutations) {
-				let thisElem = this;
-				mutations.forEach(function(mutation) {
-					let sourceNode = (mutation.target == thisElem) ? thisElem : thisElem._element;
-					let sinkNode = (mutation.target == thisElem) ? thisElem._element : thisElem;
-
-					if(sourceNode == null || sinkNode == null)
-						return;
-
-					let attributeName = mutation.attributeName;
-					let attributeValue = mutation.target.getAttribute(attributeName);
-					let attributePrefix = thisElem.attributePrefix;
-
-					if(sourceNode == thisElem && attributePrefix.length > 0 && attributeName.indexOf(attributePrefix) != 0)
-						return;
-
-					let sinkAttributeName = (sourceNode == thisElem) ? attributeName.substr(attributePrefix.length) : attributePrefix + attributeName;
-
-					if(attributeValue == null && sinkNode.hasAttribute(sinkAttributeName))
-						sinkNode.removeAttribute(sinkAttributeName);
-					else if(sinkNode.getAttribute(sinkAttributeName) != attributeValue)
-						sinkNode.setAttribute(sinkAttributeName, attributeValue);
-				});
-			}
 
 			_replaceElement() {
 				let thisElem = this;
@@ -106,32 +125,22 @@
 						for(let ctr = 0; ctr < thisElem.attributes.length; ctr++) {
 							let attributeName = thisElem.attributes[ctr].nodeName;
 							let attributeValue = thisElem.attributes[ctr].nodeValue;
-							thisElem._mutationCallback([{target: thisElem, attributeName: attributeName, attributeValue: attributeValue}])
+
+							thisElem._parentMutationCallback([{target: thisElem, attributeName: attributeName, attributeValue: attributeValue}])
+						}
+
+						// Apply attributes
+						for(let ctr = 0; ctr < thisElem._element.attributes.length; ctr++) {
+							let attributeName = thisElem._element.attributes[ctr].nodeName;
+							let attributeValue = thisElem._element.attributes[ctr].nodeValue;
+
+							thisElem._childMutationCallback([{target: thisElem._element, attributeName: attributeName, attributeValue: attributeValue}])
 						}
 
 						thisElem._elementObserver.observe(domNode, {attributes: true});
 					}
 				});
 			}
-
-			applyElementAttributes(domNode, attributes) {
-				if(typeof attributes == 'object') {
-					for(let property in attributes) {
-						if(attributes.hasOwnProperty(property) && (!domNode.hasAttribute(property) || domNode.getAttribute(property) !== attributes[property]))
-							domNode.setAttribute(property, attributes[property]);
-					}
-				}
-			}
-
-			getAttributes(target) {
-				if(typeof target === 'undefined')
-					target = this;
-				let attributes = {};
-				for(let ctr = 0; ctr < target.attributes.length; ctr++) {
-					attributes[target.attributes[ctr].nodeName] = target.attributes[ctr].nodeValue;
-				}
-				return attributes;
-			};
 
 			loadLink(href, callback) {
 				let importLink = document.querySelector("link[href='" + href + "']");
@@ -146,7 +155,7 @@
 				if(importLink.import) // already loaded
 					callback(null);
 				else {
-					importLink.onload = function() {
+					importLink.onload = function(event) {
 						callback(null);
 					};
 

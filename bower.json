@@ -1,6 +1,6 @@
 {
   "name": "external-element",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A web component that allows for an external template to be used",
   "authors": [
     { "name": "John Murphy-Teixidor", "email": "johnvmt@gmail.com" }
